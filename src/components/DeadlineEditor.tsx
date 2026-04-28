@@ -4,7 +4,7 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import toast from 'react-hot-toast';
 
 const STREAMS = Array.from({length: 20}, (_, i) => String(42 + i)); // 42 to 61
-const FORMATS = ['Базовый', 'Расширенный', 'VIP'];
+const FORMATS = ['Базовый', 'Расширенный', 'VIP', 'TO Demo'];
 
 const BLOCKS = [
   { id: 'Блок 0', title: 'Вводный' },
@@ -114,6 +114,8 @@ export default function DeadlineEditor() {
   const [formData, setFormData] = useState<Record<string, {startDate: string, endDate: string}>>({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [csvText, setCsvText] = useState('');
 
   const fetchStreamData = async () => {
     setLoading(true);
@@ -272,6 +274,79 @@ export default function DeadlineEditor() {
     }
   };
 
+  const handleImportCSV = async () => {
+    if (!csvText.trim()) return toast.error('Введите данные CSV');
+    setSaving(true);
+    try {
+      const lines = csvText.trim().split('\n');
+      let batch = writeBatch(db);
+      let count = 0;
+      let processedLines = 0;
+
+      for (const line of lines) {
+        const cleanLine = line.replace(/^"|"$/g, '').trim();
+        if (!cleanLine || cleanLine.startsWith('Поток,Блок')) continue;
+        
+        const parts = cleanLine.split(',');
+        if (parts.length < 4) continue;
+
+        const stream = parts[0].trim();
+        const blockStr = parts[1].trim();
+        const format = parts[2].trim();
+        const startDate = parts[3]?.trim() || '';
+        const endDate = parts[4]?.trim() || '';
+
+        let blockId = '';
+        const m = blockStr.match(/Блок (\d+)/);
+        if (m) {
+          blockId = `Блок ${m[1]}`;
+        } else if (blockStr.startsWith('Вводный')) {
+          blockId = 'Блок 0';
+        } else if (blockStr.startsWith('Алгоритм')) {
+          blockId = 'Блок 13';
+        } else if (blockStr.startsWith('Финальный тест')) {
+          blockId = 'Блок 14';
+        }
+
+        if (blockId && STREAMS.includes(stream) && FORMATS.includes(format)) {
+          const id = `${stream}-${format}-${blockId}`.toLowerCase().replace(/\s+/g, '-');
+          const ref = doc(db, 'deadlines', id);
+
+          batch.set(ref, {
+            stream: stream,
+            format: format,
+            block: blockId,
+            startDate: startDate,
+            endDate: endDate,
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+
+          count++;
+          processedLines++;
+          if (count === 490) {
+            await batch.commit();
+            batch = writeBatch(db);
+            count = 0;
+          }
+        }
+      }
+
+      if (count > 0) {
+        await batch.commit();
+      }
+      
+      toast.success(`Успешно импортировано ${processedLines} записей!`);
+      setShowImport(false);
+      setCsvText('');
+      fetchStreamData();
+    } catch (error) {
+       handleFirestoreError(error, OperationType.WRITE, 'deadlines');
+       toast.error('Ошибка импорта');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="w-full max-w-5xl mx-auto h-full flex flex-col pb-10">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4 shrink-0">
@@ -281,6 +356,13 @@ export default function DeadlineEditor() {
         </div>
         
         <div className="flex items-center gap-4">
+          <button 
+            onClick={() => setShowImport(!showImport)}
+            className="bg-zinc-800 hover:bg-zinc-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors"
+          >
+            Импорт CSV
+          </button>
+          
           <button 
             onClick={handleAutoGenerateAll}
             disabled={saving || loading}
@@ -311,6 +393,25 @@ export default function DeadlineEditor() {
         </div>
       </div>
 
+      {showImport && (
+        <div className="mb-6 p-6 bg-zinc-900/80 border border-zinc-800 rounded-2xl flex-shrink-0">
+          <h3 className="text-white font-medium mb-2">Импорт данных из CSV</h3>
+          <p className="text-sm text-zinc-400 mb-4">Вставьте список в формате: <code>"Поток,Блок,Формат,Дата открытия,Дата закрытия"</code></p>
+          <textarea
+            value={csvText}
+            onChange={e => setCsvText(e.target.value)}
+            placeholder={`"42,Вводный,Базовый,07.05.2025,13.08.2026"`}
+            className="w-full h-40 bg-zinc-950/50 border border-zinc-800 rounded-lg p-4 text-sm text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 mb-4 font-mono whitespace-pre custom-scrollbar"
+          />
+          <div className="flex justify-end gap-3">
+            <button onClick={() => setShowImport(false)} className="px-4 py-2 rounded-lg text-sm text-zinc-400 hover:text-white transition-colors">Отмена</button>
+            <button onClick={handleImportCSV} disabled={saving} className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-6 py-2 rounded-lg text-sm transition-colors disabled:opacity-50">
+              {saving ? 'Импортируем...' : 'Загрузить данные'}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="glass-panel rounded-2xl flex-1 overflow-auto custom-scrollbar bg-zinc-900/30 border border-zinc-800/50">
         {loading ? (
           <div className="flex items-center justify-center h-48 text-zinc-500 animate-pulse">Загрузка расписания...</div>
@@ -325,7 +426,7 @@ export default function DeadlineEditor() {
                 
                  <div className="w-full xl:w-3/4 flex flex-col gap-4">
                   {FORMATS.map(f => {
-                    const isNotSubmitting = block.id === 'Блок 13' && f === 'Базовый';
+                    const isNotSubmitting = (block.id === 'Блок 13' && f === 'Базовый') || (f === 'TO Demo' && block.id !== 'Блок 0');
                     const key = `${block.id}-${f}`;
                     const val = formData[key] || { startDate: '', endDate: '' };
                     return (
