@@ -138,7 +138,7 @@ export default function Dashboard() {
         return {
           id, stream, format, block, startDate, endDate
         };
-      }).filter(d => d.stream && d.format && d.block && d.startDate && d.endDate);
+      }).filter(d => d.stream && d.format && d.block && d.startDate && d.endDate && !(d.block === 'Блок 13' && d.format === 'Базовый'));
 
       if (processed.length === 0) {
         toast.error("Не найдено корректных данных дедлайнов.");
@@ -181,12 +181,31 @@ export default function Dashboard() {
 
   const searchedStudent = search.trim() !== '' ? students.find(s => s.email.includes(search.toLowerCase().trim())) : null;
 
-  const streams = Array.from(new Set(deadlines.map(d => d.stream))).sort();
-  const formats = Array.from(new Set(deadlines.filter(d => !selectedStream || d.stream === selectedStream).map(d => d.format))).sort();
-  const blocks = Array.from(new Set(deadlines.filter(d => 
+  const streams = Array.from(new Set<string>(deadlines.map(d => d.stream as string))).sort((a: string, b: string) => parseInt(a) - parseInt(b));
+  
+  const formatOrder = ['Базовый', 'Расширенный', 'VIP'];
+  const formats = Array.from(new Set<string>(deadlines.filter(d => !selectedStream || d.stream === selectedStream).map(d => d.format as string)))
+    .sort((a: string, b: string) => {
+      const idxA = formatOrder.indexOf(a);
+      const idxB = formatOrder.indexOf(b);
+      return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
+    });
+
+  const extractBlockNum = (b: string) => {
+    const match = b.match(/\d+/);
+    return match ? parseInt(match[0], 10) : 999;
+  };
+
+  const blocks = Array.from(new Set<string>(deadlines.filter(d => 
     (!selectedStream || d.stream === selectedStream) && 
     (!selectedFormat || d.format === selectedFormat)
-  ).map(d => d.block))).sort();
+  ).map(d => d.block as string))).sort((a: string, b: string) => extractBlockNum(a) - extractBlockNum(b));
+
+  const getBlockLabel = (blockId: string) => {
+    if (blockId === 'Блок 13') return 'Алгоритм';
+    if (blockId === 'Блок 14') return 'Финальный тест';
+    return blockId;
+  };
 
   const currentResult = deadlines.find(d => 
     d.stream === selectedStream && d.format === selectedFormat && d.block === selectedBlock
@@ -281,22 +300,28 @@ export default function Dashboard() {
                   disabled={!selectedFormat}
                 >
                   <option value="">Выберите блок</option>
-                  {blocks.map(b => <option key={b} value={b}>{b}</option>)}
+                  {blocks.map(b => <option key={b} value={b}>{getBlockLabel(b)}</option>)}
                 </select>
               </div>
             </div>
           </div>
 
-          {currentResult ? (
+          {selectedBlock === 'Блок 13' && selectedFormat === 'Базовый' ? (
+            <div className="mt-auto p-5 bg-zinc-950/80 rounded-xl border border-zinc-800 flex flex-col gap-4">
+              <div className="text-center">
+                <span className="text-lg font-bold text-zinc-400">Не сдает</span>
+              </div>
+            </div>
+          ) : currentResult ? (
             <div className="mt-auto p-5 bg-zinc-950/80 rounded-xl border border-zinc-800 flex flex-col gap-4 accent-glow border-blue-500/20">
               <div className="flex justify-between items-center">
                 <span className="text-xs text-zinc-500 tracking-wider font-medium">СТАРТ</span>
-                <span className="text-md font-mono text-emerald-400">{currentResult.startDate}</span>
+                <span className="text-md font-mono text-emerald-400">{currentResult.startDate || 'Не указано'}</span>
               </div>
               <div className="w-full h-px bg-zinc-800"></div>
               <div className="flex justify-between items-center">
                 <span className="text-xs text-zinc-500 tracking-wider font-medium">КОНЕЦ</span>
-                <span className="text-md font-mono text-rose-400">{currentResult.endDate}</span>
+                <span className="text-md font-mono text-rose-400">{currentResult.endDate || 'Не указано'}</span>
               </div>
             </div>
           ) : (

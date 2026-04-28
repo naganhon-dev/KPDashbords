@@ -4,7 +4,7 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import toast from 'react-hot-toast';
 
 const STREAMS = Array.from({length: 20}, (_, i) => String(42 + i)); // 42 to 61
-const FORMATS = ['Расширенный', 'VIP', 'Базовый'];
+const FORMATS = ['Базовый', 'Расширенный', 'VIP'];
 
 const BLOCKS = [
   { id: 'Блок 0', title: 'Вводный' },
@@ -43,7 +43,7 @@ const addYears = (dateString: string, years: number) => {
 
 const getStart = (streamStart: string, blockIndex: number) => {
   const offsetMap: Record<number, number> = {
-    0: 0, 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 7: 6, 8: 7, 9: 8, 10: 9, 11: 10, 12: 11, 13: 12, 14: 12
+    0: 0, 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 7: 6, 8: 7, 9: 8, 10: 9, 11: 10, 12: 11, 13: 12, 14: 13
   };
   return addWeeks(streamStart, offsetMap[blockIndex] || 0);
 };
@@ -66,13 +66,13 @@ const getEnd = (streamStart: string, blockIndex: number, format: string) => {
   }
 
   if (blockIndex === 13) {
-    if (format === 'Базовый') return base19;
+    if (format === 'Базовый') return ''; 
     if (format === 'Расширенный') return addWeeks(streamStart, 18);
     if (format === 'VIP') return base19;
   }
 
   if (blockIndex === 14) {
-    return base19;
+    return addWeeks(streamStart, 15);
   }
   return '';
 };
@@ -138,6 +138,7 @@ export default function DeadlineEditor() {
 
       for (const block of BLOCKS) {
         for (const format of FORMATS) {
+          if (block.id === 'Блок 13' && format === 'Базовый') continue;
           const key = `${block.id}-${format}`;
           const data = formData[key];
           if (data && (data.startDate || data.endDate)) {
@@ -206,6 +207,7 @@ export default function DeadlineEditor() {
         for (let i = 0; i < BLOCKS.length; i++) {
           const block = BLOCKS[i];
           for (const format of FORMATS) {
+            if (block.id === 'Блок 13' && format === 'Базовый') continue;
             const sd = getStart(startStr, i);
             const ed = getEnd(startStr, i, format);
 
@@ -296,36 +298,43 @@ export default function DeadlineEditor() {
                   <p className="text-zinc-500 text-sm mt-1 font-medium">{block.id}</p>
                 </div>
                 
-                <div className="w-full xl:w-3/4 flex flex-col gap-4">
+                 <div className="w-full xl:w-3/4 flex flex-col gap-4">
                   {FORMATS.map(f => {
+                    const isNotSubmitting = block.id === 'Блок 13' && f === 'Базовый';
                     const key = `${block.id}-${f}`;
                     const val = formData[key] || { startDate: '', endDate: '' };
                     return (
                       <div key={f} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6 group">
                         <span className="w-full sm:w-32 sm:text-right text-zinc-400 group-hover:text-zinc-200 transition-colors font-medium text-sm">{f}</span>
-                        <div className="flex items-center gap-4 flex-wrap sm:flex-nowrap">
-                          <div className="flex flex-col w-[160px]">
-                            <span className="text-[10px] uppercase text-zinc-600 ml-1 mb-1 font-bold tracking-wider">Дата открытия</span>
-                            <input 
-                              type="date" 
-                              value={val.startDate}
-                              onChange={e => handleChange(block.id, f, 'startDate', e.target.value)}
-                              className="w-full bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-all [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert-[0.6]"
-                            />
+                        {isNotSubmitting ? (
+                          <div className="flex items-center gap-4 flex-wrap sm:flex-nowrap w-full">
+                            <span className="text-zinc-500 italic text-sm">Не сдает</span>
                           </div>
-                          
-                          <div className="hidden sm:flex self-end mb-2 text-zinc-700 font-light">-</div>
-                          
-                          <div className="flex flex-col w-[160px]">
-                            <span className="text-[10px] uppercase text-zinc-600 ml-1 mb-1 font-bold tracking-wider">Дата окончания</span>
-                            <input 
-                              type="date" 
-                              value={val.endDate}
-                              onChange={e => handleChange(block.id, f, 'endDate', e.target.value)}
-                              className="w-full bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-all [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert-[0.6]"
-                            />
+                        ) : (
+                          <div className="flex items-center gap-4 flex-wrap sm:flex-nowrap">
+                            <div className="flex flex-col w-[160px]">
+                              <span className="text-[10px] uppercase text-zinc-600 ml-1 mb-1 font-bold tracking-wider">Дата открытия</span>
+                              <input 
+                                type="date" 
+                                value={val.startDate}
+                                onChange={e => handleChange(block.id, f, 'startDate', e.target.value)}
+                                className="w-full bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-all [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert-[0.6]"
+                              />
+                            </div>
+                            
+                            <div className="hidden sm:flex self-end mb-2 text-zinc-700 font-light">-</div>
+                            
+                            <div className="flex flex-col w-[160px]">
+                              <span className="text-[10px] uppercase text-zinc-600 ml-1 mb-1 font-bold tracking-wider">Дата окончания</span>
+                              <input 
+                                type="date" 
+                                value={val.endDate}
+                                onChange={e => handleChange(block.id, f, 'endDate', e.target.value)}
+                                className="w-full bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-all [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert-[0.6]"
+                              />
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     );
                   })}
