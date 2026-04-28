@@ -181,6 +181,45 @@ export default function Dashboard() {
 
   const searchedStudent = search.trim() !== '' ? students.find(s => s.email.includes(search.toLowerCase().trim())) : null;
 
+  const parseDate = (d: string) => {
+    if (!d) return null;
+    const parts = d.split('.');
+    if (parts.length !== 3) return null;
+    const [day, month, year] = parts.map(Number);
+    return new Date(year, month - 1, day);
+  };
+
+  const getCurrentStreamBlock = (stream: string) => {
+    if (!deadlines.length) return null;
+    const now = new Date();
+    // Default to 'Базовый' format if available, otherwise just grab any from the stream
+    const streamDeadlines = deadlines.filter(d => d.stream === stream);
+    
+    const activeBlocks = streamDeadlines.filter(d => {
+      const start = parseDate(d.startDate);
+      const end = parseDate(d.endDate);
+      if (!start) return false;
+      
+      const isStarted = now >= start;
+      const isNotEnded = !end || now <= end;
+      
+      return isStarted && isNotEnded;
+    });
+
+    if (activeBlocks.length === 0) return 'Не начат';
+
+    // Sort by start date descending to get the "latest" active block
+    activeBlocks.sort((a, b) => {
+      const dateA = parseDate(a.startDate)?.getTime() || 0;
+      const dateB = parseDate(b.startDate)?.getTime() || 0;
+      return dateB - dateA;
+    });
+
+    return activeBlocks[0].block;
+  };
+
+  const currentStreamBlock = searchedStudent ? getCurrentStreamBlock(searchedStudent.stream) : null;
+
   const streams = Array.from(new Set<string>(deadlines.map(d => d.stream as string))).sort((a: string, b: string) => parseInt(a) - parseInt(b));
   
   const formatOrder = ['Базовый', 'Расширенный', 'VIP'];
@@ -243,8 +282,12 @@ export default function Dashboard() {
                   <span className="text-lg text-white font-semibold">{searchedStudent.stream}</span>
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-xs text-zinc-500 uppercase">Блок</span>
+                  <span className="text-xs text-zinc-500 uppercase">Блок (в карточке)</span>
                   <span className="text-lg text-white font-semibold">{searchedStudent.block}</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xs text-blue-400 uppercase font-bold">Блок (по сроку)</span>
+                  <span className="text-lg text-blue-300 font-bold">{currentStreamBlock ? getBlockLabel(currentStreamBlock) : '—'}</span>
                 </div>
               </div>
             </div>
