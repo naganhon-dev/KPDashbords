@@ -140,6 +140,16 @@ export default function Dashboard() {
     d.stream === selectedStream && d.format === selectedFormat && d.block === selectedBlock
   );
 
+  const accessCloseDate = React.useMemo(() => {
+    if (!selectedStream || !selectedFormat) return null;
+    const d = deadlines.find(item => 
+      item.stream === selectedStream && 
+      item.format === selectedFormat && 
+      (item.block === 'Блок 0' || item.block === 'Блок 0 ')
+    );
+    return d ? d.endDate : null;
+  }, [selectedStream, selectedFormat, deadlines]);
+
   const bonusDate = React.useMemo(() => {
     if (!bonusStream || !bonusType) return null;
     
@@ -166,7 +176,7 @@ export default function Dashboard() {
         </span>
         <input 
           type="text" 
-          className="block w-full rounded-xl pl-12 pr-4 py-3 shadow-xl transition-all border outline-none focus:ring-1 focus:ring-[var(--app-accent)] focus:border-[var(--app-accent)]" 
+          className="block w-full rounded-xl pl-12 pr-4 py-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)] focus:translate-y-0.5 focus:shadow-none transition-all border outline-none focus:ring-1 focus:ring-[var(--app-accent)] focus:border-[var(--app-accent)]" 
           style={{ 
             backgroundColor: 'var(--app-card)', 
             borderColor: 'var(--app-border)', 
@@ -217,7 +227,7 @@ export default function Dashboard() {
       <div className="flex flex-col gap-6 w-full max-w-5xl mx-auto flex-1">
         
         {/* Deadlines Block (Replacing Catalog) */}
-        <div className="w-full glass-panel rounded-2xl p-6 flex flex-col">
+        <div className="w-full glass-panel rounded-2xl p-6 flex flex-col shadow-[8px_8px_0px_0px_rgba(0,0,0,0.05)] border border-[var(--app-border)]">
           <div className="flex items-center gap-2 mb-6">
             <svg className="w-5 h-5" style={{ color: 'var(--app-text-muted)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
             <h3 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--app-text)' }}>Сроки открытия/закрытия блоков</h3>
@@ -285,6 +295,16 @@ export default function Dashboard() {
                 <span className="text-xs tracking-wider font-medium" style={{ color: 'var(--app-text-muted)' }}>КОНЕЦ</span>
                 <span className="text-md font-mono text-rose-500 font-bold">{currentResult.endDate || 'Не указано'}</span>
               </div>
+              
+              {accessCloseDate && (
+                <>
+                  <div className="w-full h-px" style={{ backgroundColor: 'var(--app-border)' }}></div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs tracking-wider font-medium" style={{ color: 'var(--app-text-muted)' }}>ДОСТУПЫ ЗАКРОЮТСЯ</span>
+                    <span className="text-md font-mono font-bold" style={{ color: 'var(--app-accent)' }}>{accessCloseDate}</span>
+                  </div>
+                </>
+              )}
             </div>
           ) : (
             selectedStream && selectedFormat && selectedBlock && (
@@ -294,7 +314,7 @@ export default function Dashboard() {
         </div>
 
         {/* Bonus Section */}
-        <div className="w-full glass-panel rounded-2xl p-6 flex flex-col">
+        <div className="w-full glass-panel rounded-2xl p-6 flex flex-col shadow-[8px_8px_0px_0px_rgba(0,0,0,0.05)] border border-[var(--app-border)]">
           <div className="flex items-center gap-2 mb-6">
             <svg className="w-5 h-5" style={{ color: 'var(--app-accent)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5a2 2 0 00-2 2h2zm0 0V5a2 2 0 012-2h2a2 2 0 012 2v1h-2a2 2 0 01-2-2zM9 21h6a2 2 0 002-2V9a2 2 0 00-2-2H9a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
             <h3 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--app-text)' }}>Когда выдача бонусов?</h3>
@@ -336,11 +356,6 @@ export default function Dashboard() {
               <span className={`text-xl font-mono font-bold ${bonusDate ? 'text-[var(--app-accent)]' : 'text-[var(--app-text-muted)]'}`}>
                 {bonusDate || '—'}
               </span>
-              {bonusDate && (
-                <span className="text-[10px] px-2 py-1 rounded-full uppercase font-bold" style={{ backgroundColor: 'rgba(var(--app-accent-rgb), 0.1)', color: 'var(--app-accent)' }}>
-                  Автоматически
-                </span>
-              )}
             </div>
           </div>
         </div>

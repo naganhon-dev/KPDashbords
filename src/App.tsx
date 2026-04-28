@@ -149,7 +149,7 @@ export default function App() {
       )}
 
       {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 border-r flex flex-col justify-between p-6 h-full flex-shrink-0 transition-transform duration-300 lg:relative lg:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`} style={{ backgroundColor: 'var(--app-sidebar)', borderColor: 'var(--app-border)' }}>
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 border-r flex flex-col justify-between p-6 h-full flex-shrink-0 transition-transform duration-300 lg:relative lg:translate-x-0 shadow-[8px_0px_20px_-10px_rgba(0,0,0,0.2)] ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`} style={{ backgroundColor: 'var(--app-sidebar)', borderColor: 'var(--app-border)' }}>
         <div className="space-y-8">
           <div className="flex items-center justify-between lg:block">
             <div className="flex items-center gap-2">
@@ -196,9 +196,8 @@ export default function App() {
             {uploadingStudents ? 'Загрузка...' : 'Загрузить студентов'}
           </button>
 
-          <div className="p-4 rounded-xl border cursor-pointer group" style={{ backgroundColor: 'var(--app-card)', borderColor: 'var(--app-border)' }} onClick={() => auth.signOut()}>
-            <p className="text-xs font-semibold mb-1 group-hover:opacity-80 transition-opacity" style={{ color: 'var(--app-accent)' }}>Выйти</p>
-            <p className="text-sm truncate" style={{ color: 'var(--app-text-muted)' }} title={user.email || ''}>{user.email}</p>
+          <div className="p-4 rounded-xl border cursor-pointer group shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)] active:translate-y-0.5 active:shadow-none transition-all" style={{ backgroundColor: 'var(--app-card)', borderColor: 'var(--app-border)' }} onClick={() => auth.signOut()}>
+            <p className="text-xs font-semibold group-hover:opacity-80 transition-opacity" style={{ color: 'var(--app-accent)' }}>Выйти</p>
           </div>
         </div>
       </aside>
