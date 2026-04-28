@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "Дашборд КП",
+  "description": "Система контроля прогресса студентов и управления расписанием потоков.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

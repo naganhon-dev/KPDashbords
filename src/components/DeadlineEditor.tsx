@@ -348,80 +348,92 @@ export default function DeadlineEditor() {
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto h-full flex flex-col pb-10">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4 shrink-0">
-        <div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">Управление расписанием</h2>
-          <p className="text-zinc-400 text-sm mt-1">Редактирование дат по потокам и форматам</p>
-        </div>
-        
-        <div className="flex items-center gap-4">
-          <button 
-            onClick={() => setShowImport(!showImport)}
-            className="bg-zinc-800 hover:bg-zinc-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors"
-          >
-            Импорт CSV
-          </button>
-          
-          <button 
-            onClick={handleAutoGenerateAll}
-            disabled={saving || loading}
-            className="bg-zinc-800 hover:bg-zinc-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
-            title="Заполнить БД датами для всех потоков по скриншотам"
-          >
-            Сгенерировать (42-61)
-          </button>
-          
-          <div className="flex items-center gap-2 border-l border-zinc-800 pl-4 ml-2">
-            <span className="text-zinc-500 uppercase text-xs font-semibold tracking-widest hidden sm:inline">Поток:</span>
-            <select
-              value={selectedStream}
-              onChange={e => setSelectedStream(e.target.value)}
-              className="bg-zinc-900 border border-zinc-700 text-white rounded-lg px-3 py-2 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer text-sm"
-            >
-              {STREAMS.map(s => <option key={s} value={s}>Поток {s}</option>)}
-            </select>
+    <div className="w-full max-w-5xl mx-auto h-full flex flex-col pb-10" style={{ color: 'var(--app-text)' }}>
+      <div className="flex flex-col mb-8 gap-6 shrink-0">
+        <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
+          <div>
+            <h2 className="text-xl lg:text-2xl font-bold tracking-tight" style={{ color: 'var(--app-text)' }}>Управление расписанием</h2>
+            <p className="text-xs lg:text-sm mt-1" style={{ color: 'var(--app-text-muted)' }}>Редактирование дат по потокам и форматам</p>
           </div>
           
-          <button 
-            onClick={handleSave}
-            disabled={saving || loading}
-            className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-6 py-2 rounded-lg text-sm transition-colors flex items-center gap-2 disabled:opacity-50"
+          <div className="flex flex-wrap items-center gap-2 lg:gap-4">
+            <button 
+              onClick={() => setShowImport(!showImport)}
+              className="flex-1 lg:flex-none font-medium px-4 py-2 rounded-lg text-xs lg:text-sm transition-colors border"
+              style={{ backgroundColor: 'var(--app-card)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
+            >
+              Импорт CSV
+            </button>
+            
+            <button 
+              onClick={handleAutoGenerateAll}
+              disabled={saving || loading}
+              className="flex-1 lg:flex-none font-medium px-4 py-2 rounded-lg text-xs lg:text-sm transition-colors disabled:opacity-50 border whitespace-nowrap"
+              style={{ backgroundColor: 'var(--app-card)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
+              title="Заполнить БД датами для всех потоков по скриншотам"
+            >
+              Сгенерировать (42-61)
+            </button>
+            
+            <button 
+              onClick={handleSave}
+              disabled={saving || loading}
+              className="w-full lg:w-auto text-white font-medium px-6 py-2 rounded-lg text-xs lg:text-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              style={{ backgroundColor: 'var(--app-accent)' }}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+              {saving ? 'Сохранение...' : 'Сохранить'}
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 p-3 rounded-xl border" style={{ backgroundColor: 'var(--app-card)', borderColor: 'var(--app-border)' }}>
+          <span className="uppercase text-[10px] lg:text-xs font-semibold tracking-widest" style={{ color: 'var(--app-text-muted)' }}>Выберите поток:</span>
+          <select
+            value={selectedStream}
+            onChange={e => setSelectedStream(e.target.value)}
+            className="flex-1 lg:flex-none rounded-lg px-3 py-1.5 outline-none cursor-pointer text-sm border focus:ring-1 focus:ring-[var(--app-accent)] focus:border-[var(--app-accent)] transition-all"
+            style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
           >
-            {saving ? 'Сохранение...' : 'Сохранить'}
-          </button>
+            {STREAMS.map(s => {
+              const dates = STREAM_DATES[s];
+              const display = dates && dates[0] ? `${s} (${dates[0]})` : `Поток ${s}`;
+              return <option key={s} value={s}>{display}</option>;
+            })}
+          </select>
         </div>
       </div>
 
       {showImport && (
-        <div className="mb-6 p-6 bg-zinc-900/80 border border-zinc-800 rounded-2xl flex-shrink-0">
-          <h3 className="text-white font-medium mb-2">Импорт данных из CSV</h3>
-          <p className="text-sm text-zinc-400 mb-4">Вставьте список в формате: <code>"Поток,Блок,Формат,Дата открытия,Дата закрытия"</code></p>
+        <div className="mb-6 p-6 rounded-2xl flex-shrink-0 border" style={{ backgroundColor: 'var(--app-sidebar)', borderColor: 'var(--app-border)' }}>
+          <h3 className="font-medium mb-2" style={{ color: 'var(--app-text)' }}>Импорт данных из CSV</h3>
+          <p className="text-sm mb-4" style={{ color: 'var(--app-text-muted)' }}>Вставьте список в формате: <code>"Поток,Блок,Формат,Дата открытия,Дата закрытия"</code></p>
           <textarea
             value={csvText}
             onChange={e => setCsvText(e.target.value)}
             placeholder={`"42,Вводный,Базовый,07.05.2025,13.08.2026"`}
-            className="w-full h-40 bg-zinc-950/50 border border-zinc-800 rounded-lg p-4 text-sm text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 mb-4 font-mono whitespace-pre custom-scrollbar"
+            className="w-full h-40 rounded-lg p-4 text-sm outline-none mb-4 font-mono whitespace-pre custom-scrollbar border focus:ring-1 focus:ring-[var(--app-accent)] focus:border-[var(--app-accent)]"
+            style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
           />
           <div className="flex justify-end gap-3">
-            <button onClick={() => setShowImport(false)} className="px-4 py-2 rounded-lg text-sm text-zinc-400 hover:text-white transition-colors">Отмена</button>
-            <button onClick={handleImportCSV} disabled={saving} className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-6 py-2 rounded-lg text-sm transition-colors disabled:opacity-50">
+            <button onClick={() => setShowImport(false)} className="px-4 py-2 rounded-lg text-sm hover:text-white transition-colors" style={{ color: 'var(--app-text-muted)' }}>Отмена</button>
+            <button onClick={handleImportCSV} disabled={saving} className="text-white font-medium px-6 py-2 rounded-lg text-sm transition-colors disabled:opacity-50" style={{ backgroundColor: 'var(--app-accent)' }}>
               {saving ? 'Импортируем...' : 'Загрузить данные'}
             </button>
           </div>
         </div>
       )}
 
-      <div className="glass-panel rounded-2xl flex-1 overflow-auto custom-scrollbar bg-zinc-900/30 border border-zinc-800/50">
+      <div className="glass-panel rounded-2xl flex-1 overflow-auto custom-scrollbar border">
         {loading ? (
-          <div className="flex items-center justify-center h-48 text-zinc-500 animate-pulse">Загрузка расписания...</div>
+          <div className="flex items-center justify-center h-48 animate-pulse" style={{ color: 'var(--app-text-muted)' }}>Загрузка расписания...</div>
         ) : (
           <div className="flex flex-col">
             {BLOCKS.map((block, idx) => (
-              <div key={block.id} className={`p-6 md:p-8 flex flex-col xl:flex-row gap-6 ${idx !== BLOCKS.length - 1 ? 'border-b border-zinc-800/50' : ''} hover:bg-zinc-800/20 transition-colors`}>
-                <div className="w-full xl:w-1/4 pt-1">
-                  {block.title && <h3 className="text-lg font-bold text-blue-400 leading-tight">{block.title}</h3>}
-                  <p className="text-zinc-500 text-sm mt-1 font-medium">{block.id}</p>
+              <div key={block.id} className={`p-4 lg:p-8 flex flex-col xl:flex-row gap-4 lg:gap-6 ${idx !== BLOCKS.length - 1 ? 'border-b' : ''} hover:bg-black/5 transition-colors`} style={{ borderColor: 'var(--app-border)' }}>
+                <div className="w-full xl:w-1/4">
+                  {block.title && <h3 className="text-base lg:text-lg font-bold leading-tight" style={{ color: 'var(--app-accent)' }}>{block.title}</h3>}
+                  <p className="text-xs lg:text-sm mt-0.5 lg:mt-1 font-medium" style={{ color: 'var(--app-text-muted)' }}>{block.id}</p>
                 </div>
                 
                  <div className="w-full xl:w-3/4 flex flex-col gap-4">
@@ -430,33 +442,35 @@ export default function DeadlineEditor() {
                     const key = `${block.id}-${f}`;
                     const val = formData[key] || { startDate: '', endDate: '' };
                     return (
-                      <div key={f} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6 group">
-                        <span className="w-full sm:w-32 sm:text-right text-zinc-400 group-hover:text-zinc-200 transition-colors font-medium text-sm">{f}</span>
+                      <div key={f} className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-6 group">
+                        <span className="w-full sm:w-32 sm:text-right shrink-0 mt-2 transition-colors font-medium text-xs lg:text-sm" style={{ color: 'var(--app-text-muted)' }}>{f}</span>
                         {isNotSubmitting ? (
-                          <div className="flex items-center gap-4 flex-wrap sm:flex-nowrap w-full">
-                            <span className="text-zinc-500 italic text-sm">Не сдает</span>
+                          <div className="flex items-center gap-4 w-full h-10">
+                            <span className="italic text-xs lg:text-sm" style={{ color: 'var(--app-text-muted)' }}>Не сдает</span>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-4 flex-wrap sm:flex-nowrap">
-                            <div className="flex flex-col w-[160px]">
-                              <span className="text-[10px] uppercase text-zinc-600 ml-1 mb-1 font-bold tracking-wider">Дата открытия</span>
+                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 lg:gap-4 w-full">
+                            <div className="flex flex-col w-full sm:w-[160px]">
+                              <span className="text-[9px] lg:text-[10px] uppercase ml-1 mb-1 font-bold tracking-wider" style={{ color: 'var(--app-text-muted)' }}>Дата открытия</span>
                               <input 
                                 type="date" 
                                 value={val.startDate}
                                 onChange={e => handleChange(block.id, f, 'startDate', e.target.value)}
-                                className="w-full bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-all [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert-[0.6]"
+                                className="w-full border rounded-lg px-3 py-1.5 lg:py-2 text-xs lg:text-sm outline-none transition-all focus:ring-1 focus:ring-[var(--app-accent)] focus:border-[var(--app-accent)]"
+                                style={{ backgroundColor: 'var(--app-card)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
                               />
                             </div>
                             
-                            <div className="hidden sm:flex self-end mb-2 text-zinc-700 font-light">-</div>
+                            <div className="hidden sm:flex self-end mb-2 font-light" style={{ color: 'var(--app-border)' }}>-</div>
                             
-                            <div className="flex flex-col w-[160px]">
-                              <span className="text-[10px] uppercase text-zinc-600 ml-1 mb-1 font-bold tracking-wider">Дата окончания</span>
+                            <div className="flex flex-col w-full sm:w-[160px]">
+                              <span className="text-[9px] lg:text-[10px] uppercase ml-1 mb-1 font-bold tracking-wider" style={{ color: 'var(--app-text-muted)' }}>Дата окончания</span>
                               <input 
                                 type="date" 
                                 value={val.endDate}
                                 onChange={e => handleChange(block.id, f, 'endDate', e.target.value)}
-                                className="w-full bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-all [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert-[0.6]"
+                                className="w-full border rounded-lg px-3 py-1.5 lg:py-2 text-xs lg:text-sm outline-none transition-all focus:ring-1 focus:ring-[var(--app-accent)] focus:border-[var(--app-accent)]"
+                                style={{ backgroundColor: 'var(--app-card)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
                               />
                             </div>
                           </div>
