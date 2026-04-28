@@ -4,7 +4,7 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import toast from 'react-hot-toast';
 
 const STREAMS = Array.from({length: 19}, (_, i) => String(42 + i)); // 42 to 60
-const FORMATS = ['Расширенный', 'VIP', 'TO Demo', 'Базовый'];
+const FORMATS = ['Расширенный', 'VIP', 'Базовый'];
 
 const BLOCKS = [
   { id: 'Блок 0', title: 'Вводный' },
