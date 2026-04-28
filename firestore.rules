@@ -1,0 +1,78 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- PRIMITIVES ---
+    function isSignedIn() { return request.auth != null; }
+    function isAdmin() { 
+      return isSignedIn(); 
+    }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { 
+      return id is string && id.size() > 0 && id.size() <= 128; 
+    }
+
+    // --- ENTITY VALIDATORS ---
+    function isValidAdmin(val) {
+      return val.keys().hasAll(['email', 'createdAt']) && 
+             val.email is string && val.email.size() > 0 && val.email.size() <= 128;
+    }
+
+    function isValidStudent(val) {
+      return val.keys().hasAll(['email', 'stream', 'block', 'updatedAt']) && 
+             val.email is string && val.email.size() > 0 && val.email.size() <= 128 &&
+             val.stream is string && val.stream.size() >= 0 && val.stream.size() <= 128 &&
+             val.block is string && val.block.size() >= 0 && val.block.size() <= 128;
+    }
+
+    function isValidDeadline(val) {
+      return val.keys().hasAll(['stream', 'format', 'block', 'startDate', 'endDate', 'updatedAt']) && 
+             val.stream is string && val.stream.size() >= 0 && val.stream.size() <= 128 &&
+             val.format is string && val.format.size() >= 0 && val.format.size() <= 128 &&
+             val.block is string && val.block.size() >= 0 && val.block.size() <= 128 &&
+             val.startDate is string && val.startDate.size() >= 0 && val.startDate.size() <= 64 &&
+             val.endDate is string && val.endDate.size() >= 0 && val.endDate.size() <= 64;
+    }
+
+    // --- PATHS ---
+
+    // Admins Collection
+    match /admins/{adminId} {
+      allow get: if isAdmin();
+      allow list: if isAdmin(); // only admins can read any data here
+      allow create: if isAdmin() && isValidId(adminId) && isValidAdmin(incoming());
+      allow update: if false; // Admins cannot be updated, only created/deleted
+      allow delete: if isAdmin();
+    }
+
+    // Students Collection
+    match /students/{studentId} {
+      // Only admins can read this data.
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      // Only admins can create or update students
+      allow create: if isAdmin() && isValidId(studentId) && isValidStudent(incoming());
+      allow update: if isAdmin() && isValidStudent(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['email', 'stream', 'block', 'updatedAt'])
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Deadlines Collection
+    match /deadlines/{deadlineId} {
+      // Only admins can read
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow create: if isAdmin() && isValidId(deadlineId) && isValidDeadline(incoming());
+      allow update: if isAdmin() && isValidDeadline(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['stream', 'format', 'block', 'startDate', 'endDate', 'updatedAt'])
+      );
+      allow delete: if isAdmin();
+    }
+  }
+}

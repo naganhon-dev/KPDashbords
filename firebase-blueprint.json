@@ -1,0 +1,54 @@
+{
+  "entities": {
+    "student": {
+      "title": "Student",
+      "description": "Student record from export.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "description": "Student email address" },
+        "stream": { "type": "string", "description": "Поток" },
+        "block": { "type": "string", "description": "Блок" },
+        "updatedAt": { "type": "timestamp" }
+      },
+      "required": ["email", "stream", "block", "updatedAt"]
+    },
+    "deadline": {
+      "title": "Deadline",
+      "description": "Deadline record for a specific stream, format, and block.",
+      "type": "object",
+      "properties": {
+        "stream": { "type": "string" },
+        "format": { "type": "string" },
+        "block": { "type": "string" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "updatedAt": { "type": "timestamp" }
+      },
+      "required": ["stream", "format", "block", "startDate", "endDate", "updatedAt"]
+    },
+    "admin": {
+      "title": "Admin",
+      "description": "Admin privileges record",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "createdAt": { "type": "timestamp" }
+      },
+      "required": ["email", "createdAt"]
+    }
+  },
+  "firestore": {
+    "students/{studentId}": {
+      "schema": { "$ref": "#/entities/student" },
+      "description": "Students database"
+    },
+    "deadlines/{deadlineId}": {
+      "schema": { "$ref": "#/entities/deadline" },
+      "description": "Deadlines database"
+    },
+    "admins/{adminId}": {
+      "schema": { "$ref": "#/entities/admin" },
+      "description": "Admin list"
+    }
+  }
+}
