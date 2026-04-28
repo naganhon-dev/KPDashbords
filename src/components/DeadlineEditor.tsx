@@ -3,7 +3,7 @@ import { collection, doc, writeBatch, query, getDocs, serverTimestamp, where } f
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import toast from 'react-hot-toast';
 
-const STREAMS = Array.from({length: 19}, (_, i) => String(42 + i)); // 42 to 60
+const STREAMS = Array.from({length: 20}, (_, i) => String(42 + i)); // 42 to 61
 const FORMATS = ['Расширенный', 'VIP', 'Базовый'];
 
 const BLOCKS = [
@@ -11,18 +11,71 @@ const BLOCKS = [
   { id: 'Блок 1', title: 'Базовые понятия и определения' },
   { id: 'Блок 2', title: 'Уровни' },
   { id: 'Блок 3', title: 'ATR и тренды' },
-  { id: 'Блок 4', title: '' },
-  { id: 'Блок 5', title: '' },
-  { id: 'Блок 6', title: '' },
-  { id: 'Блок 7', title: '' },
-  { id: 'Блок 8', title: '' },
-  { id: 'Блок 9', title: '' },
-  { id: 'Блок 10', title: '' },
-  { id: 'Блок 11', title: '' },
-  { id: 'Блок 12', title: '' },
+  { id: 'Блок 4', title: 'Энергия' },
+  { id: 'Блок 5', title: 'Направление движения (предпосылки на отбой, пробой, ЛП)' },
+  { id: 'Блок 6', title: 'Подготовка к торгам на рынках (отбор инструментов)' },
+  { id: 'Блок 7', title: 'Как писать сценарии и понимание рынка' },
+  { id: 'Блок 8', title: 'Стили торговли, ТВХ' },
+  { id: 'Блок 9', title: 'Расчет ТВХ, риск и мани менеджмент' },
+  { id: 'Блок 10', title: 'Как собирать статистику' },
+  { id: 'Блок 11', title: 'Стили торговли менторов' },
+  { id: 'Блок 12', title: 'Практика' },
   { id: 'Блок 13', title: 'Алгоритм' },
   { id: 'Блок 14', title: 'Финальный тест' },
 ];
+
+const addWeeks = (dateString: string, weeks: number) => {
+  if (!dateString) return '';
+  const [d, m, y] = dateString.split('.').map(Number);
+  const date = new Date(y, m - 1, d);
+  date.setDate(date.getDate() + weeks * 7);
+  const nd = String(date.getDate()).padStart(2, '0');
+  const nm = String(date.getMonth() + 1).padStart(2, '0');
+  const ny = date.getFullYear();
+  return `${nd}.${nm}.${ny}`;
+};
+
+const addYears = (dateString: string, years: number) => {
+  if (!dateString) return '';
+  const [d, m, y] = dateString.split('.').map(Number);
+  return `${String(d).padStart(2, '0')}.${String(m).padStart(2, '0')}.${y + years}`;
+};
+
+const getStart = (streamStart: string, blockIndex: number) => {
+  const offsetMap: Record<number, number> = {
+    0: 0, 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 7: 6, 8: 7, 9: 8, 10: 9, 11: 10, 12: 11, 13: 12, 14: 12
+  };
+  return addWeeks(streamStart, offsetMap[blockIndex] || 0);
+};
+
+const getEnd = (streamStart: string, blockIndex: number, format: string) => {
+  const base19 = addWeeks(streamStart, 19);
+  const start12 = addWeeks(streamStart, 11);
+  const rashEnd = addYears(start12, 1);
+  const vipEnd = addYears(start12, 2);
+
+  if (blockIndex === 0) {
+    if (format === 'Базовый') return addWeeks(rashEnd, 3);
+    return '';
+  }
+
+  if (blockIndex >= 1 && blockIndex <= 12) {
+    if (format === 'Базовый') return base19;
+    if (format === 'Расширенный') return rashEnd;
+    if (format === 'VIP') return vipEnd;
+  }
+
+  if (blockIndex === 13) {
+    if (format === 'Базовый') return base19;
+    if (format === 'Расширенный') return addWeeks(streamStart, 18);
+    if (format === 'VIP') return base19;
+  }
+
+  if (blockIndex === 14) {
+    return base19;
+  }
+  return '';
+};
 
 export default function DeadlineEditor() {
   const [selectedStream, setSelectedStream] = useState('42');
@@ -30,39 +83,39 @@ export default function DeadlineEditor() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    const fetchStreamData = async () => {
-      setLoading(true);
-      try {
-        const q = query(collection(db, 'deadlines'), where('stream', '==', selectedStream));
-        const snapshot = await getDocs(q);
-        const newData: Record<string, {startDate: string, endDate: string}> = {};
+  const fetchStreamData = async () => {
+    setLoading(true);
+    try {
+      const q = query(collection(db, 'deadlines'), where('stream', '==', selectedStream));
+      const snapshot = await getDocs(q);
+      const newData: Record<string, {startDate: string, endDate: string}> = {};
+      
+      snapshot.docs.forEach(docSnap => {
+        const data = docSnap.data();
+        const key = `${data.block}-${data.format}`;
         
-        snapshot.docs.forEach(docSnap => {
-          const data = docSnap.data();
-          const key = `${data.block}-${data.format}`;
-          
-          let sd = data.startDate || '';
-          let ed = data.endDate || '';
-          
-          // convert DD.MM.YYYY to YYYY-MM-DD to pre-fill the native <input type="date">
-          const datePattern = /^(\d{2})\.(\d{2})\.(\d{4})$/;
-          if (datePattern.test(sd)) {
-            sd = sd.replace(datePattern, '$3-$2-$1');
-          }
-          if (datePattern.test(ed)) {
-            ed = ed.replace(datePattern, '$3-$2-$1');
-          }
-          
-          newData[key] = { startDate: sd, endDate: ed };
-        });
-        setFormData(newData);
-      } catch (error) {
-        handleFirestoreError(error, OperationType.LIST, 'deadlines');
-      } finally {
-        setLoading(false);
-      }
-    };
+        let sd = data.startDate || '';
+        let ed = data.endDate || '';
+        
+        const datePattern = /^(\d{2})\.(\d{2})\.(\d{4})$/;
+        if (datePattern.test(sd)) {
+          sd = sd.replace(datePattern, '$3-$2-$1');
+        }
+        if (datePattern.test(ed)) {
+          ed = ed.replace(datePattern, '$3-$2-$1');
+        }
+        
+        newData[key] = { startDate: sd, endDate: ed };
+      });
+      setFormData(newData);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'deadlines');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchStreamData();
   }, [selectedStream]);
 
@@ -134,6 +187,64 @@ export default function DeadlineEditor() {
     }
   };
 
+  const handleAutoGenerateAll = async () => {
+    if (!confirm('Вы уверены, что хотите сгенерировать расписание для всех потоков (42-61)? Это перезапишет существующие даты в БД.')) return;
+    
+    setSaving(true);
+    try {
+      const streamStarts: Record<string, string> = {
+        '42': '07.05.2025', '43': '28.05.2025', '44': '18.06.2025', '45': '09.07.2025', '46': '30.07.2025',
+        '47': '20.08.2025', '48': '10.09.2025', '49': '01.10.2025', '50': '22.10.2025', '51': '12.11.2025',
+        '52': '03.12.2025', '53': '24.12.2025', '54': '14.01.2026', '55': '04.02.2026', '56': '25.02.2026',
+        '57': '18.03.2026', '58': '08.04.2026', '59': '29.04.2026', '60': '20.05.2026', '61': '10.06.2026',
+      };
+
+      let batch = writeBatch(db);
+      let count = 0;
+
+      for (const [stream, startStr] of Object.entries(streamStarts)) {
+        for (let i = 0; i < BLOCKS.length; i++) {
+          const block = BLOCKS[i];
+          for (const format of FORMATS) {
+            const sd = getStart(startStr, i);
+            const ed = getEnd(startStr, i, format);
+
+            const id = `${stream}-${format}-${block.id}`.toLowerCase().replace(/\s+/g, '-');
+            const ref = doc(db, 'deadlines', id);
+
+            batch.set(ref, {
+              stream: stream,
+              format: format,
+              block: block.id,
+              startDate: sd,
+              endDate: ed,
+              updatedAt: serverTimestamp()
+            }, { merge: true });
+
+            count++;
+            if (count >= 490) {
+              await batch.commit();
+              batch = writeBatch(db);
+              count = 0;
+            }
+          }
+        }
+      }
+
+      if (count > 0) {
+        await batch.commit();
+      }
+      
+      toast.success('Все потоки 42-61 успешно сгенерированы!');
+      fetchStreamData(); // reload
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'deadlines');
+      toast.error('Ошибка генерации');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="w-full max-w-5xl mx-auto h-full flex flex-col pb-10">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4 shrink-0">
@@ -143,7 +254,16 @@ export default function DeadlineEditor() {
         </div>
         
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
+          <button 
+            onClick={handleAutoGenerateAll}
+            disabled={saving || loading}
+            className="bg-zinc-800 hover:bg-zinc-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
+            title="Заполнить БД датами для всех потоков по скриншотам"
+          >
+            Сгенерировать (42-61)
+          </button>
+          
+          <div className="flex items-center gap-2 border-l border-zinc-800 pl-4 ml-2">
             <span className="text-zinc-500 uppercase text-xs font-semibold tracking-widest hidden sm:inline">Поток:</span>
             <select
               value={selectedStream}
