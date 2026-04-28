@@ -348,7 +348,7 @@ export default function DeadlineEditor() {
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto h-full flex flex-col pb-10" style={{ color: 'var(--app-text)' }}>
+    <div className="w-full max-w-5xl mx-auto flex flex-col pb-10" style={{ color: 'var(--app-text)' }}>
       <div className="flex flex-col mb-8 gap-6 shrink-0">
         <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
           <div>
@@ -424,7 +424,7 @@ export default function DeadlineEditor() {
         </div>
       )}
 
-      <div className="glass-panel rounded-2xl flex-1 overflow-auto custom-scrollbar border">
+      <div className="glass-panel rounded-2xl border">
         {loading ? (
           <div className="flex items-center justify-center h-48 animate-pulse" style={{ color: 'var(--app-text-muted)' }}>Загрузка расписания...</div>
         ) : (

@@ -32,6 +32,9 @@ export default function Dashboard() {
   const [selectedFormat, setSelectedFormat] = useState<string>('');
   const [selectedBlock, setSelectedBlock] = useState<string>('');
 
+  const [bonusStream, setBonusStream] = useState<string>('');
+  const [bonusType, setBonusType] = useState<'materials' | 'pro' | ''>('');
+
   useEffect(() => {
     const qStudents = query(collection(db, 'students'));
     const unsubscribeStudents = onSnapshot(qStudents, (snapshot) => {
@@ -137,8 +140,24 @@ export default function Dashboard() {
     d.stream === selectedStream && d.format === selectedFormat && d.block === selectedBlock
   );
 
+  const bonusDate = React.useMemo(() => {
+    if (!bonusStream || !bonusType) return null;
+    
+    if (bonusType === 'materials') {
+      // Бонусные материалы -> Старт Блока 8
+      const d = deadlines.find(item => item.stream === bonusStream && item.block.includes('8'));
+      return d ? d.startDate : null;
+    } else if (bonusType === 'pro') {
+      // Бонусный Про -> Конец Блока 13 (Алгоритм)
+      // Ищем Расширенный формат как наиболее представительный
+      const d = deadlines.find(item => item.stream === bonusStream && item.block.includes('13') && item.format === 'Расширенный');
+      return d ? d.endDate : null;
+    }
+    return null;
+  }, [bonusStream, bonusType, deadlines]);
+
   return (
-    <div className="w-full h-full flex flex-col pb-10" style={{ color: 'var(--app-text)' }}>
+    <div className="w-full flex flex-col pb-10" style={{ color: 'var(--app-text)' }}>
       
       {/* Top Search Area */}
       <div className="relative w-full max-w-2xl mx-auto mb-10 shrink-0">
@@ -195,10 +214,10 @@ export default function Dashboard() {
       )}
 
       {/* Main Grid */}
-      <div className="flex flex-col gap-6 w-full max-w-5xl mx-auto flex-1 h-full min-h-0">
+      <div className="flex flex-col gap-6 w-full max-w-5xl mx-auto flex-1">
         
         {/* Deadlines Block (Replacing Catalog) */}
-        <div className="w-full glass-panel rounded-2xl p-6 flex flex-col h-full overflow-hidden">
+        <div className="w-full glass-panel rounded-2xl p-6 flex flex-col">
           <div className="flex items-center gap-2 mb-6">
             <svg className="w-5 h-5" style={{ color: 'var(--app-text-muted)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
             <h3 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--app-text)' }}>Сроки открытия/закрытия блоков</h3>
@@ -273,6 +292,59 @@ export default function Dashboard() {
             )
           )}
         </div>
+
+        {/* Bonus Section */}
+        <div className="w-full glass-panel rounded-2xl p-6 flex flex-col">
+          <div className="flex items-center gap-2 mb-6">
+            <svg className="w-5 h-5" style={{ color: 'var(--app-accent)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5a2 2 0 00-2 2h2zm0 0V5a2 2 0 012-2h2a2 2 0 012 2v1h-2a2 2 0 01-2-2zM9 21h6a2 2 0 002-2V9a2 2 0 00-2-2H9a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+            <h3 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--app-text)' }}>Когда выдача бонусов?</h3>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            <div className="space-y-2">
+              <label className="text-xs uppercase tracking-wider font-medium" style={{ color: 'var(--app-text-muted)' }}>Поток</label>
+              <select 
+                className="w-full border rounded-lg p-3 text-sm focus:outline-none appearance-none cursor-pointer focus:ring-1 focus:ring-[var(--app-accent)] focus:border-[var(--app-accent)]"
+                style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
+                value={bonusStream} 
+                onChange={(e) => setBonusStream(e.target.value)}
+              >
+                <option value="">Выберите поток</option>
+                {streams.map(s => <option key={s} value={s}>{formatStreamDisplay(s)}</option>)}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs uppercase tracking-wider font-medium" style={{ color: 'var(--app-text-muted)' }}>Тип бонуса</label>
+              <select 
+                className="w-full border rounded-lg p-3 text-sm focus:outline-none appearance-none cursor-pointer focus:ring-1 focus:ring-[var(--app-accent)] focus:border-[var(--app-accent)]"
+                style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
+                value={bonusType} 
+                onChange={(e) => setBonusType(e.target.value as any)}
+                disabled={!bonusStream}
+              >
+                <option value="">Выберите бонус</option>
+                <option value="materials">Бонусные материалы</option>
+                <option value="pro">Бонусный Про</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="mt-auto p-5 rounded-xl border flex flex-col gap-2" style={{ backgroundColor: 'var(--app-bg)', borderColor: 'var(--app-border)' }}>
+            <span className="text-xs tracking-wider font-medium" style={{ color: 'var(--app-text-muted)' }}>ДАТА ВЫДАЧИ</span>
+            <div className="flex items-center justify-between">
+              <span className={`text-xl font-mono font-bold ${bonusDate ? 'text-[var(--app-accent)]' : 'text-[var(--app-text-muted)]'}`}>
+                {bonusDate || '—'}
+              </span>
+              {bonusDate && (
+                <span className="text-[10px] px-2 py-1 rounded-full uppercase font-bold" style={{ backgroundColor: 'rgba(var(--app-accent-rgb), 0.1)', color: 'var(--app-accent)' }}>
+                  Автоматически
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   );
