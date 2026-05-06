@@ -12,17 +12,6 @@ import toast, { Toaster } from "react-hot-toast";
 import Dashboard from './components/Dashboard';
 import DeadlineEditor from './components/DeadlineEditor';
 
-declare global {
-  interface Window {
-    Telegram?: {
-      WebApp: {
-        platform: string;
-        openLink: (url: string) => void;
-      };
-    };
-  }
-}
-
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -71,45 +60,6 @@ export default function App() {
     });
     return unsubscribe;
   }, []);
-
-  const handleLogin = async () => {
-    setSigningIn(true);
-    const provider = new GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: 'select_account' });
-
-    const ua = navigator.userAgent;
-    const isTelegram = /Telegram/i.test(ua);
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(ua);
-    
-    // Специальный обход для Telegram Mini App
-    if (window.Telegram?.WebApp && window.Telegram.WebApp.platform !== 'unknown') {
-      toast("Открываю браузер для входа...");
-      window.Telegram.WebApp.openLink(window.location.href);
-      setSigningIn(false);
-      return;
-    }
-
-    try {
-      // Primary strategy: Popup
-      try {
-        await signInWithPopup(auth, provider);
-      } catch (popupError: any) {
-        console.error("Popup strategy failed:", popupError);
-        
-        // Fallback to Redirect
-        if (popupError.code === 'auth/popup-blocked' || isTelegram || isMobile) {
-          await signInWithRedirect(auth, provider);
-        } else {
-          throw popupError;
-        }
-      }
-    } catch (error: any) {
-      console.error("Total sign in failure:", error);
-      const msg = error.code === 'auth/popup-closed-by-user' ? "Вход отменен" : "Ошибка: " + error.message;
-      toast.error(msg);
-      setSigningIn(false);
-    }
-  };
 
   const handleStudentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -212,7 +162,40 @@ export default function App() {
               className="w-full text-white font-medium py-3 rounded-xl transition-all disabled:opacity-50 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)] active:translate-y-0.5 active:shadow-none"
               style={{ backgroundColor: 'var(--app-accent)' }}
               disabled={signingIn}
-              onClick={handleLogin}
+              onClick={async () => {
+                setSigningIn(true);
+                const provider = new GoogleAuthProvider();
+                
+                // Prompt for account selection to avoid automatic "silent" failures
+                provider.setCustomParameters({
+                  prompt: 'select_account'
+                });
+
+                try {
+                  const ua = navigator.userAgent;
+                  const isTelegram = /Telegram/i.test(ua);
+                  const isMobile = /iPhone|iPad|iPod|Android/i.test(ua);
+                  
+                  // Primary strategy: Popup. It works better than redirect in many frames if not blocked.
+                  try {
+                    await signInWithPopup(auth, provider);
+                  } catch (popupError: any) {
+                    console.error("Popup strategy failed:", popupError);
+                    
+                    // Fallback to Redirect if popup is blocked or environment suggests it
+                    if (popupError.code === 'auth/popup-blocked' || isTelegram || isMobile) {
+                      await signInWithRedirect(auth, provider);
+                    } else {
+                      throw popupError;
+                    }
+                  }
+                } catch (error: any) {
+                  console.error("Total sign in failure:", error);
+                  const msg = error.code === 'auth/popup-closed-by-user' ? "Вход отменен" : "Ошибка: " + error.message;
+                  toast.error(msg);
+                  setSigningIn(false);
+                }
+              }}
             >
               {signingIn ? 'Процесс входа...' : 'Войти с Google'}
             </button>
