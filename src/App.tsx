@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useState, useRef } from 'react';
-import { User, signInWithRedirect, getRedirectResult, GoogleAuthProvider } from 'firebase/auth';
+import { User, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './lib/firebase';
 import * as XLSX from 'xlsx';
@@ -25,17 +25,35 @@ export default function App() {
   const studentInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Check if we just returned from a redirect sign-in
-    getRedirectResult(auth).catch((error) => {
-      console.error("Redirect sign-in error:", error);
-      if (error.code !== 'auth/redirect-cancelled-by-user') {
-        toast.error("Ошибка входа: " + error.message);
+    // Set persistence to Local for better behavior in frames
+    setPersistence(auth, browserLocalPersistence).catch(console.error);
+
+    // Handle the result of a redirect sign-in
+    const handleRedirect = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result?.user) {
+          toast.success("Вход выполнен успешно");
+        }
+      } catch (error: any) {
+        console.error("Redirect sign-in error:", error);
+        // Special handling for common redirect issues
+        if (error.code === 'auth/internal-error' || error.code === 'auth/network-request-failed') {
+          console.warn("Potential iframe/cookie issue with redirect auth");
+        } else if (error.code !== 'auth/redirect-cancelled-by-user') {
+          toast.error("Ошибка входа: " + error.message);
+        }
+      } finally {
+        setSigningIn(false);
       }
-    });
+    };
+
+    handleRedirect();
 
     const unsubscribe = auth.onAuthStateChanged((u) => {
       setUser(u);
       setLoading(false);
+      if (u) setSigningIn(false);
     });
     return unsubscribe;
   }, []);
@@ -124,22 +142,37 @@ export default function App() {
             disabled={signingIn}
             onClick={async () => {
               setSigningIn(true);
+              const provider = new GoogleAuthProvider();
+              
+              // Custom parameters to force account selection and improve redirect behavior
+              provider.setCustomParameters({
+                prompt: 'select_account'
+              });
+
               try {
-                // Determine if we should use Popup or Redirect
-                // Telegram and most mobile in-app browsers work better with Redirect
-                const isTelegram = /Telegram/i.test(navigator.userAgent);
-                const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+                // Determine environment
+                const ua = navigator.userAgent;
+                const isTelegram = /Telegram/i.test(ua);
+                const isMobile = /iPhone|iPad|iPod|Android/i.test(ua);
                 
-                if (isTelegram || isMobile) {
-                  await signInWithRedirect(auth, new GoogleAuthProvider());
-                } else {
-                  // Standard desktop can still use popup for better UX
-                  await signInWithRedirect(auth, new GoogleAuthProvider());
-                  // I'll use Redirect for all to be safe and consistent in this fix
+                // In Telegram/Mobile, Popups are often blocked, but Redirects in Iframes also fail.
+                // We'll try Popup first, and catch the error to offer Redirect if needed.
+                try {
+                  await signInWithPopup(auth, provider);
+                } catch (popupError: any) {
+                  console.error("Popup failed, trying redirect:", popupError);
+                  
+                  // If popup is blocked or fails, try redirect
+                  if (popupError.code === 'auth/popup-blocked' || isTelegram || isMobile) {
+                    await signInWithRedirect(auth, provider);
+                  } else {
+                    throw popupError;
+                  }
                 }
               } catch (error: any) {
                 console.error("Sign in error:", error);
-                toast.error("Ошибка авторизации: " + (error.message || "Неизвестная ошибка"));
+                const msg = error.code === 'auth/popup-closed-by-user' ? "Окно входа закрыто" : "Ошибка: " + error.message;
+                toast.error(msg);
                 setSigningIn(false);
               }
             }}
