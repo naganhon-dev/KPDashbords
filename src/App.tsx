@@ -31,19 +31,22 @@ export default function App() {
     // Handle the result of a redirect sign-in
     const handleRedirect = async () => {
       try {
+        setLoading(true);
         const result = await getRedirectResult(auth);
         if (result?.user) {
           toast.success("Вход выполнен успешно");
         }
       } catch (error: any) {
         console.error("Redirect sign-in error:", error);
-        // Special handling for common redirect issues
+        
+        // Detailed error logging for debugging hangs
         if (error.code === 'auth/internal-error' || error.code === 'auth/network-request-failed') {
-          console.warn("Potential iframe/cookie issue with redirect auth");
+          console.warn("Potential iframe/cookie issue with redirect auth. This is common in Telegram Mini Apps.");
         } else if (error.code !== 'auth/redirect-cancelled-by-user') {
           toast.error("Ошибка входа: " + error.message);
         }
       } finally {
+        setLoading(false);
         setSigningIn(false);
       }
     };
@@ -123,8 +126,25 @@ export default function App() {
     localStorage.setItem('app-theme', theme);
   }, [theme]);
 
+  const copyToClipboard = () => {
+    const url = window.location.href;
+    navigator.clipboard.writeText(url).then(() => {
+      toast.success("Ссылка скопирована. Откройте её в Chrome или Safari.");
+    });
+  };
+
   if (loading) {
-    return <div className={`h-full flex items-center justify-center font-sans ${theme === 'light' ? 'bg-[#f8f9fa] text-slate-900' : 'bg-zinc-950 text-white'}`}>Загрузка...</div>;
+    return (
+      <div className={`h-full flex flex-col items-center justify-center font-sans space-y-4 theme-${theme} bg-[var(--app-bg)]`}>
+        <div className="w-12 h-12 border-4 border-[var(--app-accent)] border-t-transparent rounded-full animate-spin"></div>
+        <div className="text-sm font-medium" style={{ color: 'var(--app-text)' }}>Загрузка...</div>
+        {signingIn && (
+          <p className="text-xs max-w-xs text-center px-4" style={{ color: 'var(--app-text-muted)' }}>
+            Если окно авторизации зависло, попробуйте перезагрузить страницу или открыть приложение в браузере.
+          </p>
+        )}
+      </div>
+    );
   }
 
   if (!user) {
@@ -136,49 +156,65 @@ export default function App() {
             <h1 className="text-2xl font-semibold tracking-tight mb-2" style={{ color: 'var(--app-text)' }}>Вход в систему</h1>
             <p style={{ color: 'var(--app-text-muted)' }}>Войдите для доступа к дашборду</p>
           </div>
-          <button 
-            className="w-full text-white font-medium py-3 rounded-xl transition-all disabled:opacity-50"
-            style={{ backgroundColor: 'var(--app-accent)' }}
-            disabled={signingIn}
-            onClick={async () => {
-              setSigningIn(true);
-              const provider = new GoogleAuthProvider();
-              
-              // Custom parameters to force account selection and improve redirect behavior
-              provider.setCustomParameters({
-                prompt: 'select_account'
-              });
-
-              try {
-                // Determine environment
-                const ua = navigator.userAgent;
-                const isTelegram = /Telegram/i.test(ua);
-                const isMobile = /iPhone|iPad|iPod|Android/i.test(ua);
+          
+          <div className="space-y-4">
+            <button 
+              className="w-full text-white font-medium py-3 rounded-xl transition-all disabled:opacity-50 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)] active:translate-y-0.5 active:shadow-none"
+              style={{ backgroundColor: 'var(--app-accent)' }}
+              disabled={signingIn}
+              onClick={async () => {
+                setSigningIn(true);
+                const provider = new GoogleAuthProvider();
                 
-                // In Telegram/Mobile, Popups are often blocked, but Redirects in Iframes also fail.
-                // We'll try Popup first, and catch the error to offer Redirect if needed.
+                // Prompt for account selection to avoid automatic "silent" failures
+                provider.setCustomParameters({
+                  prompt: 'select_account'
+                });
+
                 try {
-                  await signInWithPopup(auth, provider);
-                } catch (popupError: any) {
-                  console.error("Popup failed, trying redirect:", popupError);
+                  const ua = navigator.userAgent;
+                  const isTelegram = /Telegram/i.test(ua);
+                  const isMobile = /iPhone|iPad|iPod|Android/i.test(ua);
                   
-                  // If popup is blocked or fails, try redirect
-                  if (popupError.code === 'auth/popup-blocked' || isTelegram || isMobile) {
-                    await signInWithRedirect(auth, provider);
-                  } else {
-                    throw popupError;
+                  // Primary strategy: Popup. It works better than redirect in many frames if not blocked.
+                  try {
+                    await signInWithPopup(auth, provider);
+                  } catch (popupError: any) {
+                    console.error("Popup strategy failed:", popupError);
+                    
+                    // Fallback to Redirect if popup is blocked or environment suggests it
+                    if (popupError.code === 'auth/popup-blocked' || isTelegram || isMobile) {
+                      await signInWithRedirect(auth, provider);
+                    } else {
+                      throw popupError;
+                    }
                   }
+                } catch (error: any) {
+                  console.error("Total sign in failure:", error);
+                  const msg = error.code === 'auth/popup-closed-by-user' ? "Вход отменен" : "Ошибка: " + error.message;
+                  toast.error(msg);
+                  setSigningIn(false);
                 }
-              } catch (error: any) {
-                console.error("Sign in error:", error);
-                const msg = error.code === 'auth/popup-closed-by-user' ? "Окно входа закрыто" : "Ошибка: " + error.message;
-                toast.error(msg);
-                setSigningIn(false);
-              }
-            }}
-          >
-            {signingIn ? 'Вход...' : 'Войти с Google'}
-          </button>
+              }}
+            >
+              {signingIn ? 'Процесс входа...' : 'Войти с Google'}
+            </button>
+
+            {signingIn && (
+              <div className="pt-4 border-t border-[var(--app-border)] text-center">
+                <p className="text-[10px] mb-3" style={{ color: 'var(--app-text-muted)' }}>
+                  Проблемы со входом в приложении Telegram?
+                </p>
+                <button 
+                  onClick={copyToClipboard}
+                  className="text-[10px] font-bold uppercase tracking-widest hover:opacity-80 transition-opacity"
+                  style={{ color: 'var(--app-accent)' }}
+                >
+                  Скопировать ссылку для браузера
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
