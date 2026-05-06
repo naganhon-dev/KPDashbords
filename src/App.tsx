@@ -40,23 +40,21 @@ export default function App() {
           const userCredential = await signInAnonymously(auth);
           const user = userCredential.user;
           
-          // If we have a username from TG, set it as displayName so Dashboard can find the student
-          if (tg.initDataUnsafe?.user) {
-            const tgUser = tg.initDataUnsafe.user;
-            const identifier = tgUser.username || `tg_${tgUser.id}`;
-            // We can't easily set displayName on an anonymous user without a separate tool,
-            // but we can at least log it or handle it in the component.
-            console.log("Logged in as Telegram user:", identifier);
-          }
-          
           if (tg.expand) tg.expand();
           if (tg.ready) tg.ready();
           
           toast.success("Вход через Telegram выполнен");
         } catch (error: any) {
           console.error("Telegram auto-login failed:", error);
-          toast.error("Ошибка входа через Telegram: " + (error.message || "Метод входа не активен"));
+          
+          if (error.code === 'auth/admin-restricted-operation') {
+            toast.error("В Firebase Console не включен метод 'Anonymous Auth'. Пожалуйста, включите его в настройках Authentication.", { duration: 6000 });
+          } else {
+            toast.error("Ошибка входа через Telegram: " + (error.message || "Неизвестная ошибка"));
+          }
           setSigningIn(false);
+          // Set a fake user state or similar if we want to allow guest access?
+          // For now, staying on the login screen with the error is better for dev feedback.
         } finally {
           setLoading(false);
         }
@@ -248,17 +246,32 @@ export default function App() {
               {!signingIn && (
                 <div className="w-8 h-8 border-4 border-[var(--app-accent)] border-t-transparent rounded-full animate-spin mb-4"></div>
               )}
-              <p className="text-xs text-center mb-6" style={{ color: 'var(--app-text-muted)' }}>
-                {signingIn ? 'Пробуем войти еще раз...' : 'Пожалуйста, подождите. Мы настраиваем ваш доступ...'}
+              <p className="text-xs text-center mb-6 px-4" style={{ color: 'var(--app-text-muted)' }}>
+                {signingIn ? 'Пробуем войти еще раз...' : 'Пожалуйста, подождите. Мы настраиваем ваш доступ... Если авторизация не удалась, проверьте настройки Firebase.'}
               </p>
               
-              <button 
-                onClick={() => window.location.reload()}
-                className="text-[10px] font-bold uppercase tracking-widest hover:opacity-80 transition-opacity border px-4 py-2 rounded-lg"
-                style={{ color: 'var(--app-text-muted)', borderColor: 'var(--app-border)' }}
-              >
-                Обновить страницу
-              </button>
+              <div className="flex flex-col gap-2 w-full">
+                <button 
+                  onClick={() => window.location.reload()}
+                  className="w-full text-[10px] font-bold uppercase tracking-widest hover:opacity-80 transition-opacity border px-4 py-3 rounded-xl"
+                  style={{ color: 'var(--app-text)', borderColor: 'var(--app-border)' }}
+                >
+                  Обновить страницу
+                </button>
+                
+                <button 
+                  onClick={() => {
+                    // Force a "guest" user state by creating a minimal mock user 
+                    // This is a workaround if Firebase Auth is disabled
+                    setUser({ isAnonymous: true, uid: 'guest_' + Date.now() } as any);
+                    setLoading(false);
+                  }}
+                  className="w-full text-[10px] font-bold uppercase tracking-widest hover:opacity-80 transition-opacity px-4 py-3 rounded-xl"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.05)', color: 'var(--app-text-muted)' }}
+                >
+                  Войти как гость (ручной поиск)
+                </button>
+              </div>
             </div>
           )}
         </div>
