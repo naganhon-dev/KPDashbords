@@ -36,12 +36,27 @@ export default function App() {
         setLoading(true);
         try {
           console.log("Telegram detected, attempting auto-login...");
-          await signInAnonymously(auth);
-          // Store TG metadata in user record if needed
-          tg.expand(); // Expand the webapp to full height
-          tg.ready();
-        } catch (error) {
+          // Try to sign in. Ensure Anonymous auth is enabled in Firebase Console!
+          const userCredential = await signInAnonymously(auth);
+          const user = userCredential.user;
+          
+          // If we have a username from TG, set it as displayName so Dashboard can find the student
+          if (tg.initDataUnsafe?.user) {
+            const tgUser = tg.initDataUnsafe.user;
+            const identifier = tgUser.username || `tg_${tgUser.id}`;
+            // We can't easily set displayName on an anonymous user without a separate tool,
+            // but we can at least log it or handle it in the component.
+            console.log("Logged in as Telegram user:", identifier);
+          }
+          
+          if (tg.expand) tg.expand();
+          if (tg.ready) tg.ready();
+          
+          toast.success("Вход через Telegram выполнен");
+        } catch (error: any) {
           console.error("Telegram auto-login failed:", error);
+          toast.error("Ошибка входа через Telegram: " + (error.message || "Метод входа не активен"));
+          setSigningIn(false);
         } finally {
           setLoading(false);
         }
@@ -230,10 +245,20 @@ export default function App() {
 
           {isTelegram && (
             <div className="flex flex-col items-center justify-center py-4">
-              <div className="w-8 h-8 border-4 border-[var(--app-accent)] border-t-transparent rounded-full animate-spin mb-4"></div>
-              <p className="text-xs text-center" style={{ color: 'var(--app-text-muted)' }}>
-                Пожалуйста, подождите. Мы настраиваем ваш доступ...
+              {!signingIn && (
+                <div className="w-8 h-8 border-4 border-[var(--app-accent)] border-t-transparent rounded-full animate-spin mb-4"></div>
+              )}
+              <p className="text-xs text-center mb-6" style={{ color: 'var(--app-text-muted)' }}>
+                {signingIn ? 'Пробуем войти еще раз...' : 'Пожалуйста, подождите. Мы настраиваем ваш доступ...'}
               </p>
+              
+              <button 
+                onClick={() => window.location.reload()}
+                className="text-[10px] font-bold uppercase tracking-widest hover:opacity-80 transition-opacity border px-4 py-2 rounded-lg"
+                style={{ color: 'var(--app-text-muted)', borderColor: 'var(--app-border)' }}
+              >
+                Обновить страницу
+              </button>
             </div>
           )}
         </div>
@@ -291,23 +316,27 @@ export default function App() {
         </div>
         
         <div className="flex flex-col gap-4">
-          <input 
-            type="file" 
-            accept=".xlsx, .xls, .csv" 
-            ref={studentInputRef} 
-            onChange={handleStudentUpload} 
-            disabled={uploadingStudents} 
-            className="hidden" 
-          />
-          <button
-            onClick={() => studentInputRef.current?.click()}
-            disabled={uploadingStudents}
-            className="w-full flex items-center justify-center gap-2 p-2 rounded-lg text-xs font-semibold border transition-all hover:bg-black/5 disabled:opacity-50"
-            style={{ backgroundColor: 'var(--app-card)', borderColor: 'var(--app-border)', color: 'var(--app-text-muted)' }}
-          >
-            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
-            {uploadingStudents ? 'Загрузка...' : 'Загрузить студентов'}
-          </button>
+          {!user.isAnonymous && (
+            <>
+              <input 
+                type="file" 
+                accept=".xlsx, .xls, .csv" 
+                ref={studentInputRef} 
+                onChange={handleStudentUpload} 
+                disabled={uploadingStudents} 
+                className="hidden" 
+              />
+              <button
+                onClick={() => studentInputRef.current?.click()}
+                disabled={uploadingStudents}
+                className="w-full flex items-center justify-center gap-2 p-2 rounded-lg text-xs font-semibold border transition-all hover:bg-black/5 disabled:opacity-50"
+                style={{ backgroundColor: 'var(--app-card)', borderColor: 'var(--app-border)', color: 'var(--app-text-muted)' }}
+              >
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
+                {uploadingStudents ? 'Загрузка...' : 'Загрузить студентов'}
+              </button>
+            </>
+          )}
 
           <div className="p-4 rounded-xl border cursor-pointer group shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)] active:translate-y-0.5 active:shadow-none transition-all" style={{ backgroundColor: 'var(--app-card)', borderColor: 'var(--app-border)' }} onClick={() => auth.signOut()}>
             <p className="text-xs font-semibold group-hover:opacity-80 transition-opacity" style={{ color: 'var(--app-accent)' }}>Выйти</p>
@@ -351,7 +380,7 @@ export default function App() {
         </header>
         
         <div className="flex-1 p-4 lg:p-10 overflow-auto">
-          {activeTab === 'dashboard' ? <Dashboard /> : <DeadlineEditor />}
+          {activeTab === 'dashboard' ? <Dashboard user={user} /> : <DeadlineEditor />}
         </div>
       </main>
     </div>

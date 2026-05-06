@@ -4,6 +4,8 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import * as XLSX from 'xlsx';
 import toast from 'react-hot-toast';
 
+import { User } from 'firebase/auth';
+
 interface Student {
   id: string;
   email: string;
@@ -22,7 +24,11 @@ interface Deadline {
   updatedAt?: any;
 }
 
-export default function Dashboard() {
+interface DashboardProps {
+  user: User;
+}
+
+export default function Dashboard({ user }: DashboardProps) {
   const [students, setStudents] = useState<Student[]>([]);
   const [deadlines, setDeadlines] = useState<Deadline[]>([]);
   
@@ -54,7 +60,32 @@ export default function Dashboard() {
     };
   }, []);
 
-  const searchedStudent = search.trim() !== '' ? students.find(s => s.email.includes(search.toLowerCase().trim())) : null;
+  const searchedStudent = React.useMemo(() => {
+    // 1. If user is searching manually
+    if (search.trim() !== '') {
+      return students.find(s => s.email.toLowerCase().includes(search.toLowerCase().trim()));
+    }
+
+    // 2. Automated search for the logged in user
+    if (!user) return null;
+    
+    // Google Login (Email)
+    if (user.email) {
+      return students.find(s => s.email.toLowerCase() === user.email?.toLowerCase());
+    }
+    
+    // Telegram Login (Anonymous + WebApp data)
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg?.initDataUnsafe?.user) {
+      const tgUser = tg.initDataUnsafe.user;
+      return students.find(s => 
+        s.email.toLowerCase() === tgUser.username?.toLowerCase() || 
+        s.email.toLowerCase() === `tg_${tgUser.id}`
+      );
+    }
+    
+    return null;
+  }, [students, user, search]);
 
   const parseDate = (d: string) => {
     if (!d) return null;
@@ -188,39 +219,50 @@ export default function Dashboard() {
         />
       </div>
 
-      {search.trim() !== '' && (
-        <div className="glass-panel rounded-2xl p-4 lg:p-6 flex flex-col lg:flex-row items-center justify-between shadow-xl mb-8 gap-4 max-w-5xl mx-auto w-full shrink-0" style={{ borderColor: 'var(--app-accent)' }}>
-          {searchedStudent ? (
-            <div className="flex flex-col lg:flex-row items-center gap-4 lg:gap-6 w-full">
-              <div className="text-center lg:text-left">
-                <p className="text-[10px] lg:text-xs uppercase tracking-widest font-bold mb-1" style={{ color: 'var(--app-accent)' }}>Результат поиска</p>
-                <h2 className="text-lg lg:text-2xl font-bold break-all" style={{ color: 'var(--app-text)' }}>{searchedStudent.email}</h2>
+      {/* Automated Recognition UI */}
+      {searchedStudent ? (
+        <div className="glass-panel rounded-2xl p-4 lg:p-6 flex flex-col lg:flex-row items-center justify-between shadow-xl mb-8 gap-4 max-w-5xl mx-auto w-full shrink-0 border-l-4" style={{ borderColor: 'var(--app-accent)' }}>
+          <div className="flex flex-col lg:flex-row items-center gap-4 lg:gap-6 w-full">
+            <div className="text-center lg:text-left">
+              <p className="text-[10px] lg:text-xs uppercase tracking-widest font-bold mb-1" style={{ color: 'var(--app-accent)' }}>
+                {search.trim() !== '' ? 'Результат поиска' : 'Ваш профиль (Telegram)'}
+              </p>
+              <h2 className="text-lg lg:text-2xl font-bold break-all" style={{ color: 'var(--app-text)' }}>{searchedStudent.email}</h2>
+            </div>
+            <div className="hidden lg:block h-12 w-px" style={{ backgroundColor: 'var(--app-border)' }}></div>
+            <div className="grid grid-cols-2 lg:flex gap-4 lg:gap-8 w-full lg:w-auto">
+              <div className="flex flex-col">
+                <span className="text-[10px] lg:text-xs uppercase" style={{ color: 'var(--app-text-muted)' }}>Поток</span>
+                <div className="flex flex-col">
+                  <span className="text-sm lg:text-lg font-semibold leading-tight" style={{ color: 'var(--app-text)' }}>{searchedStudent.stream}</span>
+                  {streamStartDates[searchedStudent.stream] && (
+                    <span className="text-[9px] lg:text-[10px] font-medium" style={{ color: 'var(--app-text-muted)' }}>от {streamStartDates[searchedStudent.stream]}</span>
+                  )}
+                </div>
               </div>
-              <div className="hidden lg:block h-12 w-px" style={{ backgroundColor: 'var(--app-border)' }}></div>
-              <div className="grid grid-cols-2 lg:flex gap-4 lg:gap-8 w-full lg:w-auto">
-                <div className="flex flex-col">
-                  <span className="text-[10px] lg:text-xs uppercase" style={{ color: 'var(--app-text-muted)' }}>Поток</span>
-                  <div className="flex flex-col">
-                    <span className="text-sm lg:text-lg font-semibold leading-tight" style={{ color: 'var(--app-text)' }}>{searchedStudent.stream}</span>
-                    {streamStartDates[searchedStudent.stream] && (
-                      <span className="text-[9px] lg:text-[10px] font-medium" style={{ color: 'var(--app-text-muted)' }}>от {streamStartDates[searchedStudent.stream]}</span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] lg:text-xs uppercase" style={{ color: 'var(--app-text-muted)' }}>Текущий прогресс</span>
-                  <span className="text-sm lg:text-lg font-semibold" style={{ color: 'var(--app-text)' }}>{searchedStudent.block}</span>
-                </div>
-                <div className="flex flex-col col-span-2 lg:col-auto lg:items-start text-center lg:text-left">
-                  <span className="text-[10px] lg:text-xs uppercase font-bold" style={{ color: 'var(--app-accent)' }}>Прогресс потока</span>
-                  <span className="text-md lg:text-lg font-bold" style={{ color: 'var(--app-accent)' }}>{currentStreamBlock ? getBlockLabel(currentStreamBlock) : '—'}</span>
-                </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] lg:text-xs uppercase" style={{ color: 'var(--app-text-muted)' }}>Текущий прогресс</span>
+                <span className="text-sm lg:text-lg font-semibold" style={{ color: 'var(--app-text)' }}>{searchedStudent.block}</span>
+              </div>
+              <div className="flex flex-col col-span-2 lg:col-auto lg:items-start text-center lg:text-left">
+                <span className="text-[10px] lg:text-xs uppercase font-bold" style={{ color: 'var(--app-accent)' }}>Прогресс потока</span>
+                <span className="text-md lg:text-lg font-bold" style={{ color: 'var(--app-accent)' }}>{currentStreamBlock ? getBlockLabel(currentStreamBlock) : '—'}</span>
               </div>
             </div>
-          ) : (
-            <div style={{ color: 'var(--app-text-muted)' }}>Пользователь с такой почтой не найден</div>
-          )}
+          </div>
         </div>
+      ) : (
+        (search.trim() !== '' || (user && user.isAnonymous)) && (
+          <div className="text-center p-10 glass-panel rounded-2xl mb-8 max-w-5xl mx-auto w-full border-dashed border" style={{ borderColor: 'var(--app-border)' }}>
+            <svg className="w-12 h-12 mx-auto mb-4 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.172 9.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <p className="text-lg font-medium" style={{ color: 'var(--app-text)' }}>
+              {search.trim() !== '' ? `Студент "${search}" не найден` : 'Ваш аккаунт Telegram не найден в базе студентов'}
+            </p>
+            <p className="text-sm mt-2" style={{ color: 'var(--app-text-muted)' }}>
+              {search.trim() !== '' ? 'Проверьте правильность написания' : 'Пожалуйста, обратитесь к куратору для привязки вашего аккаунта'}
+            </p>
+          </div>
+        )
       )}
 
       {/* Main Grid */}
