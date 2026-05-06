@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useState, useRef } from 'react';
-import { User, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { User, signInWithRedirect, getRedirectResult, GoogleAuthProvider } from 'firebase/auth';
 import { doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './lib/firebase';
 import * as XLSX from 'xlsx';
@@ -21,9 +21,18 @@ export default function App() {
     return (localStorage.getItem('app-theme') as 'forest' | 'light' | 'dark') || 'forest';
   });
   const [uploadingStudents, setUploadingStudents] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
   const studentInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    // Check if we just returned from a redirect sign-in
+    getRedirectResult(auth).catch((error) => {
+      console.error("Redirect sign-in error:", error);
+      if (error.code !== 'auth/redirect-cancelled-by-user') {
+        toast.error("Ошибка входа: " + error.message);
+      }
+    });
+
     const unsubscribe = auth.onAuthStateChanged((u) => {
       setUser(u);
       setLoading(false);
@@ -110,18 +119,32 @@ export default function App() {
             <p style={{ color: 'var(--app-text-muted)' }}>Войдите для доступа к дашборду</p>
           </div>
           <button 
-            className="w-full text-white font-medium py-3 rounded-xl transition-all"
+            className="w-full text-white font-medium py-3 rounded-xl transition-all disabled:opacity-50"
             style={{ backgroundColor: 'var(--app-accent)' }}
+            disabled={signingIn}
             onClick={async () => {
+              setSigningIn(true);
               try {
-                await signInWithPopup(auth, new GoogleAuthProvider());
+                // Determine if we should use Popup or Redirect
+                // Telegram and most mobile in-app browsers work better with Redirect
+                const isTelegram = /Telegram/i.test(navigator.userAgent);
+                const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+                
+                if (isTelegram || isMobile) {
+                  await signInWithRedirect(auth, new GoogleAuthProvider());
+                } else {
+                  // Standard desktop can still use popup for better UX
+                  await signInWithRedirect(auth, new GoogleAuthProvider());
+                  // I'll use Redirect for all to be safe and consistent in this fix
+                }
               } catch (error: any) {
                 console.error("Sign in error:", error);
                 toast.error("Ошибка авторизации: " + (error.message || "Неизвестная ошибка"));
+                setSigningIn(false);
               }
             }}
           >
-            Войти с Google
+            {signingIn ? 'Вход...' : 'Войти с Google'}
           </button>
         </div>
       </div>
