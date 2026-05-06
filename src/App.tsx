@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useState, useRef } from 'react';
-import { User, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { User, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, setPersistence, browserLocalPersistence, signInAnonymously } from 'firebase/auth';
 import { doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './lib/firebase';
 import * as XLSX from 'xlsx';
@@ -30,6 +30,24 @@ export default function App() {
 
     // Handle the result of a redirect sign-in
     const handleRedirect = async () => {
+      // Check for Telegram first
+      const tg = (window as any).Telegram?.WebApp;
+      if (tg?.initData && !auth.currentUser) {
+        setLoading(true);
+        try {
+          console.log("Telegram detected, attempting auto-login...");
+          await signInAnonymously(auth);
+          // Store TG metadata in user record if needed
+          tg.expand(); // Expand the webapp to full height
+          tg.ready();
+        } catch (error) {
+          console.error("Telegram auto-login failed:", error);
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
       try {
         setLoading(true);
         const result = await getRedirectResult(auth);
@@ -148,73 +166,76 @@ export default function App() {
   }
 
   if (!user) {
+    const isTelegram = (window as any).Telegram?.WebApp?.initData;
+
     return (
       <div className={`h-full flex items-center justify-center font-sans p-4 theme-${theme} bg-[var(--app-bg)]`}>
         <Toaster position="top-right" toastOptions={{ style: { background: 'var(--app-sidebar)', color: 'var(--app-text)', border: '1px solid var(--app-border)' } }} />
         <div className="glass-panel w-full max-w-sm rounded-2xl p-8 accent-glow" style={{ borderColor: 'var(--app-accent)' }}>
           <div className="text-center mb-8">
             <h1 className="text-2xl font-semibold tracking-tight mb-2" style={{ color: 'var(--app-text)' }}>Вход в систему</h1>
-            <p style={{ color: 'var(--app-text-muted)' }}>Войдите для доступа к дашборду</p>
+            <p style={{ color: 'var(--app-text-muted)' }}>{isTelegram ? 'Авторизация через Telegram...' : 'Войдите для доступа к дашборду'}</p>
           </div>
           
-          <div className="space-y-4">
-            <button 
-              className="w-full text-white font-medium py-3 rounded-xl transition-all disabled:opacity-50 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)] active:translate-y-0.5 active:shadow-none"
-              style={{ backgroundColor: 'var(--app-accent)' }}
-              disabled={signingIn}
-              onClick={async () => {
-                setSigningIn(true);
-                const provider = new GoogleAuthProvider();
-                
-                // Prompt for account selection to avoid automatic "silent" failures
-                provider.setCustomParameters({
-                  prompt: 'select_account'
-                });
+          {!isTelegram && (
+            <div className="space-y-4">
+              <button 
+                className="w-full text-white font-medium py-3 rounded-xl transition-all disabled:opacity-50 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)] active:translate-y-0.5 active:shadow-none"
+                style={{ backgroundColor: 'var(--app-accent)' }}
+                disabled={signingIn}
+                onClick={async () => {
+                  setSigningIn(true);
+                  const provider = new GoogleAuthProvider();
+                  provider.setCustomParameters({ prompt: 'select_account' });
 
-                try {
-                  const ua = navigator.userAgent;
-                  const isTelegram = /Telegram/i.test(ua);
-                  const isMobile = /iPhone|iPad|iPod|Android/i.test(ua);
-                  
-                  // Primary strategy: Popup. It works better than redirect in many frames if not blocked.
                   try {
-                    await signInWithPopup(auth, provider);
-                  } catch (popupError: any) {
-                    console.error("Popup strategy failed:", popupError);
-                    
-                    // Fallback to Redirect if popup is blocked or environment suggests it
-                    if (popupError.code === 'auth/popup-blocked' || isTelegram || isMobile) {
-                      await signInWithRedirect(auth, provider);
-                    } else {
-                      throw popupError;
+                    try {
+                      await signInWithPopup(auth, provider);
+                    } catch (popupError: any) {
+                      console.error("Popup strategy failed:", popupError);
+                      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+                      if (popupError.code === 'auth/popup-blocked' || isMobile) {
+                        await signInWithRedirect(auth, provider);
+                      } else {
+                        throw popupError;
+                      }
                     }
+                  } catch (error: any) {
+                    console.error("Total sign in failure:", error);
+                    const msg = error.code === 'auth/popup-closed-by-user' ? "Вход отменен" : "Ошибка: " + error.message;
+                    toast.error(msg);
+                    setSigningIn(false);
                   }
-                } catch (error: any) {
-                  console.error("Total sign in failure:", error);
-                  const msg = error.code === 'auth/popup-closed-by-user' ? "Вход отменен" : "Ошибка: " + error.message;
-                  toast.error(msg);
-                  setSigningIn(false);
-                }
-              }}
-            >
-              {signingIn ? 'Процесс входа...' : 'Войти с Google'}
-            </button>
+                }}
+              >
+                {signingIn ? 'Процесс входа...' : 'Войти с Google'}
+              </button>
 
-            {signingIn && (
-              <div className="pt-4 border-t border-[var(--app-border)] text-center">
-                <p className="text-[10px] mb-3" style={{ color: 'var(--app-text-muted)' }}>
-                  Проблемы со входом в приложении Telegram?
-                </p>
-                <button 
-                  onClick={copyToClipboard}
-                  className="text-[10px] font-bold uppercase tracking-widest hover:opacity-80 transition-opacity"
-                  style={{ color: 'var(--app-accent)' }}
-                >
-                  Скопировать ссылку для браузера
-                </button>
-              </div>
-            )}
-          </div>
+              {signingIn && (
+                <div className="pt-4 border-t border-[var(--app-border)] text-center">
+                  <p className="text-[10px] mb-3" style={{ color: 'var(--app-text-muted)' }}>
+                    Проблемы со входом?
+                  </p>
+                  <button 
+                    onClick={copyToClipboard}
+                    className="text-[10px] font-bold uppercase tracking-widest hover:opacity-80 transition-opacity"
+                    style={{ color: 'var(--app-accent)' }}
+                  >
+                    Скопировать ссылку для браузера
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {isTelegram && (
+            <div className="flex flex-col items-center justify-center py-4">
+              <div className="w-8 h-8 border-4 border-[var(--app-accent)] border-t-transparent rounded-full animate-spin mb-4"></div>
+              <p className="text-xs text-center" style={{ color: 'var(--app-text-muted)' }}>
+                Пожалуйста, подождите. Мы настраиваем ваш доступ...
+              </p>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -320,12 +341,12 @@ export default function App() {
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path></svg>
               )}
             </button>
-            <div className="text-right hidden sm:block">
-              <p className="text-xs" style={{ color: 'var(--app-text-muted)' }}>{user.email}</p>
-            </div>
-            <div className="w-10 h-10 rounded-full border flex items-center justify-center overflow-hidden" style={{ backgroundColor: 'var(--app-card)', borderColor: 'var(--app-border)' }}>
-              {user.photoURL ? <img src={user.photoURL} alt="avatar" /> : <div style={{ color: 'var(--app-text-muted)' }}>A</div>}
-            </div>
+          <div className="text-right hidden sm:block">
+            <p className="text-xs" style={{ color: 'var(--app-text-muted)' }}>{user.email || (user.isAnonymous ? 'Telegram User' : 'Anonymous')}</p>
+          </div>
+          <div className="w-10 h-10 rounded-full border flex items-center justify-center overflow-hidden" style={{ backgroundColor: 'var(--app-card)', borderColor: 'var(--app-border)' }}>
+            {user.photoURL ? <img src={user.photoURL} alt="avatar" /> : <div style={{ color: 'var(--app-text-muted)' }}>{user.email ? user.email[0].toUpperCase() : 'T'}</div>}
+          </div>
           </div>
         </header>
         
